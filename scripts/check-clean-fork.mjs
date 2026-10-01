@@ -1,33 +1,37 @@
 import fs from 'node:fs';
+import path from 'node:path';
 
-const checks = [
-  {
-    file: 'index.html',
-    forbidden: [
-      'umami.lazygyu.net',
-      "gtag('config', 'G-5899C1DJM0')",
-      'window.ads',
-      'marblerouletteshop.com',
-      'id="btnShop"',
-      '광고문의',
-    ],
-  },
-  {
-    file: 'src/index.ts',
-    forbidden: ['AdService', 'marblerouletteshop.com', 'window as any).ads', 'umami?.track'],
-  },
-  {
-    file: 'src/keywordService.ts',
-    forbidden: ['marblerouletteshop.com'],
-  },
+const sourceExtensions = new Set(['.ts', '.tsx', '.js', '.mjs', '.html', '.scss', '.css', '.json']);
+
+function collectFiles(target) {
+  const stat = fs.statSync(target);
+  if (stat.isFile()) return [target];
+
+  return fs.readdirSync(target, { withFileTypes: true }).flatMap((entry) => {
+    const child = path.join(target, entry.name);
+    if (entry.isDirectory()) return collectFiles(child);
+    return sourceExtensions.has(path.extname(entry.name)) ? [child] : [];
+  });
+}
+
+const appFiles = ['index.html', ...collectFiles('src')];
+const forbidden = [
+  ['upstream analytics host', 'umami.lazygyu.net'],
+  ['Google Analytics property', 'G-5899C1DJM0'],
+  ['ad runtime hook', 'window.ads'],
+  ['ad service class', 'AdService'],
+  ['upstream shop endpoint', 'marblerouletteshop.com'],
+  ['shop UI', 'id="btnShop"'],
+  ['advertising contact UI', '광고문의'],
+  ['Umami event tracking', 'umami.track'],
 ];
 
 let failed = false;
-for (const { file, forbidden } of checks) {
+for (const file of appFiles) {
   const content = fs.readFileSync(file, 'utf8');
-  for (const token of forbidden) {
+  for (const [label, token] of forbidden) {
     if (content.includes(token)) {
-      console.error(`[clean-fork] ${file}: forbidden token remains: ${token}`);
+      console.error(`[clean-fork] ${file}: ${label} remains (${token})`);
       failed = true;
     }
   }
@@ -39,4 +43,4 @@ if (fs.existsSync('src/adService.ts')) {
 }
 
 if (failed) process.exit(1);
-console.log('[clean-fork] no advertising or analytics endpoints detected');
+console.log(`[clean-fork] checked ${appFiles.length} app files; no advertising or analytics endpoints detected`);
