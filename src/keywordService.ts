@@ -1,8 +1,7 @@
 export class KeywordService {
   async init(): Promise<void> {
-    // The upstream implementation periodically fetches keyword sprites from
-    // marblerouletteshop.com. This fork intentionally keeps marble rendering
-    // local-only, so external keyword loading is disabled.
+    // This fork intentionally keeps marble rendering local-only, so external
+    // keyword and sprite loading is disabled.
   }
 
   destroy(): void {}
