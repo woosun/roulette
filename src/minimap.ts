@@ -1,169 +1,167 @@
-import {RenderParameters} from './rouletteRenderer';
-import {initialZoom} from './data/constants';
-import {UIObject} from './UIObject';
-import {bound} from './utils/bound.decorator';
-import { Rect } from './types/rect.type';
-import {WheelState} from './types/WheelState';
-import {BoxState} from './types/BoxState';
-import {JumperState} from './types/JumperState';
-import {VectorLike} from './types/VectorLike';
+import { initialZoom } from './data/constants';
+import type { RenderParameters } from './rouletteRenderer';
+import type { ColorTheme } from './types/ColorTheme';
+import type { MapEntityState } from './types/MapEntity.type';
+import type { Rect } from './types/rect.type';
+import type { VectorLike } from './types/VectorLike';
+import type { UIObject } from './UIObject';
+import { bound } from './utils/bound.decorator';
+
+/** 미니맵 최대 배율. 맵이 길면 화면 높이에 맞춰 이보다 작아진다 */
+const MINIMAP_SCALE = 4;
+const MINIMAP_UNITS = 26;
+/** 미니맵은 좌측에 세로로 긴 스트립이다. 다른 HUD가 피해가려면 이 값이 필요하다 */
+export const MINIMAP_INSET = 10;
+export const MINIMAP_WIDTH = MINIMAP_UNITS * MINIMAP_SCALE;
 
 export class Minimap implements UIObject {
-    private ctx!: CanvasRenderingContext2D;
-    private lastParams: RenderParameters | null = null;
+  private ctx!: CanvasRenderingContext2D;
+  private lastParams: RenderParameters | null = null;
 
-    private _onViewportChangeHandler: ((pos?: VectorLike) => void) | null = null;
-    private boundingBox: Rect;
-    private mousePosition: {x: number, y: number} | null = null;
+  private _onViewportChangeHandler: ((pos?: VectorLike) => void) | null = null;
+  private boundingBox: Rect;
+  private mousePosition: { x: number; y: number } | null = null;
+  private scale = MINIMAP_SCALE;
 
-    constructor() {
-        this.boundingBox = {
-            x: 10,
-            y: 10,
-            w: 26 * 4,
-            h: 0,
-        };
+  constructor() {
+    this.boundingBox = {
+      x: MINIMAP_INSET,
+      y: MINIMAP_INSET,
+      w: MINIMAP_WIDTH,
+      h: 0,
+    };
+  }
+
+  getBoundingBox(): Rect | null {
+    return this.boundingBox;
+  }
+
+  onViewportChange(callback: (pos?: VectorLike) => void) {
+    this._onViewportChangeHandler = callback;
+  }
+
+  update(): void {
+    // nothing to do
+  }
+
+  @bound
+  onMouseMove(e?: { x: number; y: number }) {
+    if (!e) {
+      this.mousePosition = null;
+      if (this._onViewportChangeHandler) {
+        this._onViewportChangeHandler();
+      }
+      return;
     }
-
-    getBoundingBox(): Rect | null {
-        return this.boundingBox;
+    if (!this.lastParams) return;
+    this.mousePosition = {
+      x: e.x,
+      y: e.y,
+    };
+    if (this._onViewportChangeHandler) {
+      this._onViewportChangeHandler({
+        x: this.mousePosition.x / this.scale,
+        y: this.mousePosition.y / this.scale,
+      });
     }
+  }
 
-    onViewportChange(callback: (pos?: VectorLike) => void) {
-        this._onViewportChangeHandler = callback;
-    }
+  render(ctx: CanvasRenderingContext2D, params: RenderParameters, _width: number, height: number) {
+    if (!ctx) return;
+    const { stage } = params;
+    if (!stage) return;
+    // 맵이 길어도 화면 세로 안에 전부 들어가도록 배율을 줄인다
+    const maxHeight = Math.max(0, height - MINIMAP_INSET * 2);
+    this.scale = Math.min(MINIMAP_SCALE, maxHeight / stage.goalY);
+    this.boundingBox.w = MINIMAP_UNITS * this.scale;
+    this.boundingBox.h = stage.goalY * this.scale;
 
-    update(deltaTime: number): void {
-        // nothing to do
-    }
+    this.lastParams = params;
 
-    @bound
-    onMouseMove(e?: { x: number; y: number; }) {
-        if (!e) {
-            this.mousePosition = null;
-            if (this._onViewportChangeHandler) {
-                this._onViewportChangeHandler();
-            }
-            return;
+    this.ctx = ctx;
+    ctx.save();
+    ctx.fillStyle = params.theme.minimapBackground;
+    ctx.translate(MINIMAP_INSET, MINIMAP_INSET);
+    ctx.scale(this.scale, this.scale);
+    ctx.fillRect(0, 0, MINIMAP_UNITS, stage.goalY);
+
+    this.ctx.lineWidth = 3 / (params.camera.zoom + initialZoom);
+    this.drawEntities(params.entities, params.theme);
+    this.drawMarbles(params);
+    this.drawViewport(params);
+
+    ctx.restore();
+    ctx.save();
+    ctx.strokeStyle = 'green';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(this.boundingBox.x, this.boundingBox.y, this.boundingBox.w, this.boundingBox.h);
+    ctx.restore();
+  }
+
+  private drawViewport(params: RenderParameters) {
+    this.ctx.save();
+    const { camera, size } = params;
+    const zoom = camera.zoom * initialZoom;
+    const w = size.x / zoom;
+    const h = size.y / zoom;
+    this.ctx.strokeStyle = params.theme.minimapViewport;
+    this.ctx.lineWidth = 1 / zoom;
+    this.ctx.strokeRect(camera.x - w / 2, camera.y - h / 2, w, h);
+    this.ctx.restore();
+  }
+
+  private drawEntities(entities: MapEntityState[], theme: ColorTheme) {
+    this.ctx.save();
+    entities.forEach((entity) => {
+      this.ctx.save();
+      this.ctx.fillStyle = entity.shape.color ?? theme.entity[entity.shape.type].fill;
+      this.ctx.strokeStyle = entity.shape.color ?? theme.entity[entity.shape.type].outline;
+      this.ctx.translate(entity.x, entity.y);
+      this.ctx.rotate(entity.angle);
+
+      this.ctx.save();
+      const shape = entity.shape;
+      switch (shape.type) {
+        case 'box': {
+          const w = shape.width * 2;
+          const h = shape.height * 2;
+          this.ctx.rotate(shape.rotation);
+          this.ctx.fillRect(-w / 2, -h / 2, w, h);
+          break;
         }
-        if (!this.lastParams) return;
-        this.mousePosition = {
-            x: e.x,
-            y: e.y,
-        };
-        if (this._onViewportChangeHandler) {
-            this._onViewportChangeHandler({ x: this.mousePosition.x / 4, y: this.mousePosition.y / 4});
-        }
-    }
-
-    render(ctx: CanvasRenderingContext2D, params: RenderParameters) {
-        if (!ctx) return;
-        const {stage} = params;
-        if (!stage) return;
-        this.boundingBox.h = stage.goalY * 4;
-
-        this.lastParams = params;
-
-        this.ctx = ctx;
-        ctx.save();
-        ctx.fillStyle = '#333';
-        ctx.translate(10, 10);
-        ctx.scale(4, 4);
-        ctx.fillRect(0, 0, 26, stage.goalY);
-
-        this.ctx.lineWidth = 3 / (params.camera.zoom + initialZoom);
-        this.drawWalls(params);
-        this.drawWheels(params.wheels);
-        this.drawBoxes(params.boxes);
-        this.drawJumpers(params.jumpers);
-        this.drawMarbles(params);
-        this.drawViewport(params);
-
-        ctx.restore();
-        ctx.save();
-        ctx.strokeStyle = 'green';
-        ctx.lineWidth = 1;
-        ctx.strokeRect(this.boundingBox.x, this.boundingBox.y, this.boundingBox.w, this.boundingBox.h);
-        ctx.restore();
-    }
-
-    private drawViewport(params: RenderParameters) {
-        this.ctx.save();
-        const {camera, size} = params;
-        const zoom = (camera.zoom * initialZoom);
-        const w = size.x / zoom;
-        const h = size.y / zoom;
-        this.ctx.strokeStyle = 'white';
-        this.ctx.lineWidth = 1 / zoom;
-        this.ctx.strokeRect(camera.x - w/2, camera.y - h/2,  w,  h);
-        this.ctx.restore();
-    }
-
-    private drawWalls(params: RenderParameters) {
-        if (!params.stage) return;
-        this.ctx.save();
-        this.ctx.strokeStyle = 'black';
-        this.ctx.lineWidth = 0.5;
-        this.ctx.beginPath();
-        params.stage.walls.forEach((wallDef) => {
-            this.ctx.moveTo(wallDef[0][0], wallDef[0][1]);
-            for (let i = 1; i < wallDef.length; i++) {
-                this.ctx.lineTo(wallDef[i][0], wallDef[i][1]);
-            }
-        });
-        this.ctx.stroke();
-        this.ctx.closePath();
-        this.ctx.restore();
-    }
-
-    private drawWheels(wheels: WheelState[]) {
-        this.ctx.save();
-        this.ctx.fillStyle = '#94d5ed';
-        wheels.forEach((wheel) => {
-            this.ctx.save();
-            this.ctx.translate(wheel.x, wheel.y);
-            this.ctx.rotate(wheel.angle);
-            this.ctx.fillRect(-wheel.size, -0.05, wheel.size * 2, 0.1);
-            this.ctx.restore();
-        });
-        this.ctx.restore();
-    }
-
-    private drawBoxes(boxes: BoxState[]) {
-        this.ctx.save();
-        this.ctx.fillStyle = '#94d5ed';
-        this.ctx.strokeStyle = '#94d5ed';
-
-        boxes.forEach((box) => {
-            this.ctx.save();
-            this.ctx.translate(box.x, box.y);
-            this.ctx.rotate(box.angle);
-            this.ctx.fillRect(-box.width / 2, -box.height / 2, box.width, box.height);
-            this.ctx.strokeRect(-box.width / 2, -box.height / 2, box.width, box.height);
-            this.ctx.restore();
-        });
-        this.ctx.restore();
-    }
-
-    private drawJumpers(jumpers: JumperState[]) {
-        this.ctx.save();
-        this.ctx.fillStyle = 'yellow';
-        this.ctx.strokeStyle = 'yellow';
-        jumpers.forEach((jumper) => {
-            this.ctx.save();
-            this.ctx.translate(jumper.x, jumper.y);
+        case 'circle':
+          this.ctx.beginPath();
+          this.ctx.arc(0, 0, shape.radius, 0, Math.PI * 2, false);
+          this.ctx.stroke();
+          break;
+        case 'polyline':
+          if (shape.points.length > 0) {
             this.ctx.beginPath();
-            this.ctx.arc(0, 0, jumper.radius, 0, Math.PI * 2, false);
+            this.ctx.moveTo(shape.points[0][0], shape.points[0][1]);
+            for (let i = 1; i < shape.points.length; i++) {
+              this.ctx.lineTo(shape.points[i][0], shape.points[i][1]);
+            }
             this.ctx.stroke();
-            this.ctx.restore();
-        });
-        this.ctx.restore();
-    }
+          }
+          break;
+      }
+      this.ctx.restore();
+      this.ctx.restore();
+    });
+    this.ctx.restore();
+  }
 
-    private drawMarbles(params: RenderParameters) {
-        const {marbles} = params;
-        marbles.forEach((marble) => {
-            marble.render(this.ctx, 1, false, true);
-        });
-    }
+  private drawMarbles(params: RenderParameters) {
+    const { marbles } = params;
+    const viewPort = {
+      x: params.camera.x,
+      y: params.camera.y,
+      w: params.size.x,
+      h: params.size.y,
+      zoom: params.camera.zoom * initialZoom,
+    };
+    marbles.forEach((marble) => {
+      marble.render(this.ctx, 1, false, true, undefined, viewPort, params.theme);
+    });
+  }
 }

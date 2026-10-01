@@ -1,7 +1,7 @@
 import './localization';
-import {Roulette} from './roulette';
 import options from './options';
+import { Roulette } from './roulette';
 
 const roulette = new Roulette();
-(window as any).roullete = roulette;
+(window as any).roulette = roulette;
 (window as any).options = options;

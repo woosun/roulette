@@ -3,18 +3,19 @@
   "version": "1.0.0",
   "license": "MIT",
   "devDependencies": {
-    "@parcel/packager-raw-url": "^2.11.0",
-    "@parcel/transformer-sass": "^2.11.0",
-    "@parcel/transformer-webmanifest": "^2.11.0",
-    "parcel": "^2.11.0",
-    "path-browserify": "^1.0.0",
-    "process": "^0.11.10",
-    "tsup": "^6.2.3",
-    "typescript": "^5.4.3"
+    "@biomejs/biome": "2.4.4",
+    "@parcel/packager-raw-url": "^2.16.4",
+    "@parcel/transformer-sass": "^2.16.4",
+    "@parcel/transformer-webmanifest": "^2.16.4",
+    "parcel": "^2.16.4",
+    "tsx": "^4.23.13",
+    "typescript": "^5.6.3"
   },
   "scripts": {
-    "dev": "parcel index.html",
-    "build": "parcel build index.html --public-url /roulette/"
+    "lint": "biome check --fix src/",
+    "dev": "parcel index.html --port 1235",
+    "build": "parcel build index.html --public-url /roulette/ && node scripts/build-sw.js",
+    "simulate": "tsx scripts/simulate.ts"
   },
   "dependencies": {
     "box2d-wasm": "^7.0.0"

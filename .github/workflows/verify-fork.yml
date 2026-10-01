@@ -1,0 +1,24 @@
+name: Verify fork
+
+on:
+  push:
+    branches:
+      - 'sync/**'
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install dependencies
+        run: yarn install --frozen-lockfile
+      - name: Verify ad-free fork policy
+        run: node scripts/check-clean-fork.mjs
+      - name: Build
+        run: yarn build

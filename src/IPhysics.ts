@@ -1,34 +1,28 @@
-import type {StageDef} from './data/maps';
-import type {WheelState} from './types/WheelState';
-import type {BoxState} from './types/BoxState';
-import type {JumperState} from './types/JumperState';
+import type { StageDef } from './data/maps';
+import type { MapEntityState } from './types/MapEntity.type';
 
 export interface IPhysics {
-    init(): Promise<void>;
+  init(): Promise<void>;
 
-    clear(): void;
+  clear(): void;
 
-    clearMarbles(): void;
+  clearMarbles(): void;
 
-    createStage(stage: StageDef): void;
+  createStage(stage: StageDef): void;
 
-    createMarble(id: number, x: number, y: number): void;
+  createMarble(id: number, x: number, y: number): void;
 
-    shakeMarble(id: number): void;
+  shakeMarble(id: number): void;
 
-    removeMarble(id: number): void;
+  removeMarble(id: number): void;
 
-    getMarblePosition(id: number): { x: any; y: any };
+  getMarblePosition(id: number): { x: number; y: number; angle: number };
 
-    getWheels(): WheelState[];
+  getEntities(): MapEntityState[];
 
-    getBoxes(): BoxState[];
+  impact(id: number): void;
 
-    getJumpers(): JumperState[];
+  start(): void;
 
-    impact(id: number): void;
-
-    start(): void;
-
-    step(deltaSeconds: number): void;
+  step(deltaSeconds: number): void;
 }
